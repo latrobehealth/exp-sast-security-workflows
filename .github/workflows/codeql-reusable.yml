@@ -1,0 +1,41 @@
+# org/security-workflows/.github/workflows/codeql-reusable.yml
+name: CodeQL (reusable)
+on:
+  workflow_call:
+    inputs:
+      languages:    { type: string, required: true }   # JSON array
+      build-mode:   { type: string, default: "none" }
+      runner:       { type: string, default: "ubuntu-latest" }
+      query-suite:  { type: string, default: "security-extended" }
+
+permissions:
+  contents: read
+  security-events: write     # upload SARIF
+  packages: read
+
+jobs:
+  analyze:
+    runs-on: ${{ inputs.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.languages) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ inputs.build-mode }}
+          queries: ${{ inputs.query-suite }}
+
+      # Manual build example (only when build-mode: manual)
+      - name: Build (.NET manual mode)
+        if: ${{ inputs.build-mode == 'manual' && matrix.language == 'csharp' }}
+        run: dotnet build --configuration Release /p:UseSharedCompilation=false
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
