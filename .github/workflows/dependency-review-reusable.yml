@@ -1,0 +1,40 @@
+# org/security-workflows/.github/workflows/dependency-review-reusable.yml
+name: Dependency Review (reusable)
+on:
+  workflow_call:
+    inputs:
+      fail-on-severity:
+        type: string
+        default: "high"    # critical | high | moderate | low
+      allow-licenses:
+        type: string
+        default: ""        # comma-separated SPDX identifiers; empty = allow all
+      deny-packages:
+        type: string
+        default: ""        # comma-separated package ecosystem:name pairs to block
+      comment-summary-in-pr:
+        type: string
+        default: "always"  # always | on-failure | never
+
+# OWASP Top 10 2025 coverage:
+#   A03 – Software Supply Chain Failures  (CVE detection in added/changed dependencies)
+#   A04 – Cryptographic Failures          (flags deps with known weak-crypto CVEs)
+#   A08 – Software or Data Integrity      (detects deps with integrity-affecting vulnerabilities)
+
+permissions:
+  contents: read
+  pull-requests: write    # post dependency-review summary comment on the PR
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          allow-licenses: ${{ inputs.allow-licenses }}
+          deny-packages: ${{ inputs.deny-packages }}
+          comment-summary-in-pr: ${{ inputs.comment-summary-in-pr }}

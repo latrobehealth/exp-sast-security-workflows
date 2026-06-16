@@ -10,11 +10,32 @@ This repository provides a library of reusable, parameterised security scanning 
 
 ---
 
+## OWASP Top 10 2025 Coverage
+
+The table below maps each [OWASP Top 10:2025](https://owasp.org/Top10/2025/) category to the workflow(s) in this repository that provide coverage, and notes where complementary controls outside CI are required.
+
+| # | Category | CodeQL | Dependency Review | Notes |
+|---|---|:---:|:---:|---|
+| A01 | Broken Access Control | Partial | — | Path traversal, injection-based bypasses. Logic-based access control requires manual review. |
+| A02 | Security Misconfiguration | Partial | — | Code-level insecure defaults caught by CodeQL. IaC misconfigurations require Checkov / Trivy. |
+| A03 | Software Supply Chain Failures | — | **Yes** | CVE detection on added/changed dependencies. Pair with Dependabot for automated updates. |
+| A04 | Cryptographic Failures | **Yes** | Partial | Weak algorithms, insecure RNG, hardcoded secrets. Dependency Review flags deps with crypto CVEs. |
+| A05 | Injection | **Yes** | — | SQL, command, XSS, path, template, LDAP injection. Core CodeQL strength. |
+| A06 | Insecure Design | — | — | Architectural weakness; requires threat modelling and design review — not detectable via SAST. |
+| A07 | Authentication Failures | Partial | — | Hardcoded credentials and weak authentication patterns. Runtime auth logic needs manual review. |
+| A08 | Software or Data Integrity Failures | Partial | Partial | Unsafe deserialization (CodeQL). Vulnerable dependency versions (Dependency Review). |
+| A09 | Security Logging & Alerting Failures | — | — | Runtime concern; not detectable via SAST. Requires log aggregation and alerting platform. |
+| A10 | Mishandling of Exceptional Conditions | Partial | — | Information leakage via exceptions. Full coverage requires runtime testing. |
+
+**Legend:** **Yes** = primary tool for this category · Partial = some but not full coverage · — = not applicable
+
+---
+
 ## Workflows
 
 ### `codeql-reusable.yml` — CodeQL Analysis
 
-Runs [GitHub CodeQL](https://codeql.github.com/) static analysis against one or more languages using a matrix strategy. Designed to be called from any repository that wants code-scanning coverage without duplicating workflow boilerplate.
+Runs [GitHub CodeQL](https://codeql.github.com/) static analysis against one or more languages using a matrix strategy. Covers **A01, A04, A05, A07, A08, A10** from OWASP Top 10:2025.
 
 #### Inputs
 
@@ -50,7 +71,7 @@ Any language supported by CodeQL: `javascript`, `typescript`, `python`, `java`, 
 **Minimal (interpreted language):**
 
 ```yaml
-# .github/workflows/codeql.yml  — in your application repo
+# .github/workflows/codeql.yml — in your application repo
 name: CodeQL
 
 on:
@@ -98,13 +119,82 @@ jobs:
 
 ---
 
+### `dependency-review-reusable.yml` — Dependency Review
+
+Scans dependency changes introduced by a pull request for known CVEs and licence policy violations using [actions/dependency-review-action](https://github.com/actions/dependency-review-action). Covers **A03** (Supply Chain Failures) and contributes to **A04** and **A08** from OWASP Top 10:2025.
+
+> **Note:** This workflow only runs on pull requests. It compares the dependency manifest between the base and head commits, so it has no effect on direct pushes to a branch.
+
+#### Inputs
+
+| Input | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `fail-on-severity` | `string` | No | `high` | Minimum severity to fail the check: `critical`, `high`, `moderate`, `low` |
+| `allow-licenses` | `string` | No | `""` | Comma-separated SPDX licence identifiers to permit; empty = allow all |
+| `deny-packages` | `string` | No | `""` | Comma-separated `ecosystem:name` package identifiers to block unconditionally |
+| `comment-summary-in-pr` | `string` | No | `always` | When to post a summary comment: `always`, `on-failure`, `never` |
+
+#### Permissions granted
+
+| Permission | Level | Reason |
+|---|---|---|
+| `contents` | `read` | Read dependency manifests |
+| `pull-requests` | `write` | Post dependency review summary comment on the PR |
+
+#### Usage
+
+**Default (block high+ CVEs, all licences allowed):**
+
+```yaml
+# .github/workflows/dependency-review.yml — in your application repo
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  dependency-review:
+    uses: org/security-workflows/.github/workflows/dependency-review-reusable.yml@main
+    secrets: inherit
+```
+
+**Enforce licence policy and block specific packages:**
+
+```yaml
+jobs:
+  dependency-review:
+    uses: org/security-workflows/.github/workflows/dependency-review-reusable.yml@main
+    with:
+      fail-on-severity: moderate
+      allow-licenses: "MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC"
+      deny-packages: "npm:event-stream, npm:node-ipc"
+    secrets: inherit
+```
+
+---
+
+## Complementary Controls (outside this repository)
+
+The following OWASP Top 10:2025 categories are not fully addressed by SAST alone and require additional controls:
+
+| Category | Recommended complementary control |
+|---|---|
+| **A02 Security Misconfiguration** | [Checkov](https://www.checkov.io/) or [Trivy](https://github.com/aquasecurity/trivy) for IaC scanning (Terraform, Helm, Dockerfiles). GitHub's [Actions security hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions) for CI/CD misconfiguration. |
+| **A03 Supply Chain Failures** | Enable [Dependabot version updates](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates) alongside `dependency-review-reusable.yml` to keep dependencies patched continuously. |
+| **A06 Insecure Design** | Threat modelling (STRIDE / PASTA) and architecture review as part of the design phase. Not detectable via automated tooling. |
+| **A09 Logging & Alerting Failures** | Runtime log aggregation, alerting thresholds, and incident response runbooks. Consider SIEM integration (Splunk, Datadog, Azure Sentinel). |
+
+---
+
 ## Repository Structure
 
 ```
 .
 ├── .github/
 │   └── workflows/
-│       └── codeql-reusable.yml   # CodeQL reusable workflow
+│       ├── codeql-reusable.yml            # CodeQL SAST (A01, A04, A05, A07, A08, A10)
+│       └── dependency-review-reusable.yml # Dependency CVE scan (A03, A04, A08)
 └── README.md
 ```
 
@@ -115,7 +205,8 @@ jobs:
 1. Create a new file under `.github/workflows/` named `<tool>-reusable.yml`.
 2. Use `on: workflow_call` with typed `inputs` and `secrets` blocks.
 3. Grant only the minimum permissions required.
-4. Document the workflow in this README under a new **Workflows** sub-section, including an inputs table and usage examples.
+4. Add an inline comment block listing which OWASP Top 10:2025 categories the workflow covers (see existing workflows for the format).
+5. Document the workflow in this README: add it to the OWASP coverage table, add a **Workflows** sub-section with an inputs table and usage examples, and update the repository structure tree.
 
 ---
 
@@ -123,7 +214,8 @@ jobs:
 
 - Results are surfaced in the **Security > Code scanning** tab of each consuming repository.
 - SARIF uploads require the consuming repository to have GitHub Advanced Security enabled (included for all public repositories and for organisations with a GHAS licence).
-- Pinning the workflow reference to a SHA (`@<sha>`) rather than a branch provides supply-chain integrity for production use.
+- Pinning the workflow reference to a commit SHA (`@<sha>`) rather than a branch provides supply-chain integrity for production use.
+- These workflows target **OWASP Top 10:2025**. The coverage table above is reviewed and updated with each new OWASP release.
 
 ---
 

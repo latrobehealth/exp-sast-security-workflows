@@ -1,4 +1,18 @@
 # org/security-workflows/.github/workflows/codeql-reusable.yml
+#
+# OWASP Top 10 2025 coverage (security-extended query suite):
+#   A01 – Broken Access Control       (path traversal, LDAP/XPath injection bypass)
+#   A04 – Cryptographic Failures      (weak algorithms, insecure RNG, hardcoded secrets)
+#   A05 – Injection                   (SQL, command, XSS, path, template, LDAP injection)
+#   A07 – Authentication Failures     (hardcoded credentials, weak authentication patterns)
+#   A08 – Software/Data Integrity     (unsafe deserialization, unsafe reflection)
+#   A10 – Improper Error Handling     (information leakage via exceptions)
+#
+# Not covered by CodeQL alone — see complementary workflows / notes in README:
+#   A02 – Security Misconfiguration   (use IaC scanning: Checkov / Trivy)
+#   A03 – Supply Chain Failures       (use dependency-review-reusable.yml + Dependabot)
+#   A06 – Insecure Design             (requires threat modelling and architecture review)
+#   A09 – Logging & Alerting Failures (runtime monitoring; not detectable via SAST)
 name: CodeQL (reusable)
 on:
   workflow_call:
