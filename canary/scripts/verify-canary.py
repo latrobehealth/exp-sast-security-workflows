@@ -38,14 +38,18 @@ EXPECTED: dict[str, tuple[str, str]] = {
     # A07 / A09 — Auth Failures / Logging Failures
     "cs/log-forging":                               ("A07/A09", "Log Forging (credentials / sensitive data)"),
     # A08 — Software and Data Integrity
-    "cs/xml-injection":                             ("A08", "XML External Entity (XXE)"),
+    # cs/xml-injection = XPath injection (user input inside SelectSingleNode expression).
+    # XXE is a different vulnerability; Request.Body (Stream) is not a CodeQL taint source
+    # in security-extended, so XXE is in BONUS below.
+    "cs/xml-injection":                             ("A08", "XPath Injection"),
 }
 
-# Rules that ARE in the canary but require security-and-quality suite;
-# included in the summary table as informational only.
+# Rules present in the canary but outside security-extended (need security-and-quality)
+# or not yet modelled by CodeQL C# pack.  Informational only — do not affect pass/fail.
 BONUS: dict[str, tuple[str, str]] = {
     "cs/stack-trace-exposure": ("A05", "Stack Trace Exposure (needs security-and-quality suite)"),
-    "cs/ssrf":                 ("A10", "SSRF (CodeQL model coverage varies by version)"),
+    "cs/ssrf":                 ("A10", "SSRF (HttpClient not yet modelled as SSRF sink in C# pack)"),
+    "cs/xml-external-entity":  ("A08", "XXE — Request.Body stream not a taint source in security-extended"),
 }
 
 
