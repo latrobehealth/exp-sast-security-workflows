@@ -49,7 +49,21 @@ jobs:
         if: ${{ inputs.build-mode == 'manual' && matrix.language == 'csharp' }}
         run: dotnet build --configuration Release /p:UseSharedCompilation=false
 
+      # Save SARIF locally so the enrichment step can annotate it before upload
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
+          category: "/language:${{ matrix.language }}"
+          upload: false
+          output: sarif-results
+
+      # Inject OWASP Top 10:2025 category IDs into tags and add clickable OWASP
+      # URLs to each rule's help markdown. Python 3 is pre-installed on ubuntu-latest.
+      - name: Enrich SARIF with OWASP Top 10:2025
+        run: python3 .github/scripts/enrich-sarif-owasp.py sarif-results
+
+      - name: Upload SARIF to GitHub Advanced Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sarif-results
           category: "/language:${{ matrix.language }}"
