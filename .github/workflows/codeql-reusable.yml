@@ -58,12 +58,24 @@ on:
         type: boolean
         default: false
         description: 'Run the SAST canary to verify OWASP Top 10:2025 detection coverage'
+      allure-project-name:
+        type: string
+        default: ''
+        description: >
+          Allure TestOps project name for the calling repo (e.g. exp-membership-service).
+          Leave empty to skip Allure TestOps sync entirely.
     secrets:
       canary-token:
         required: false
         description: >
           PAT with contents:read on latrobehealth/exp-sast-security-workflows.
           Required only when the repo is private.  Omit for internal/public repos.
+      ALLURE_TESTOPS_URL:
+        required: false
+        description: 'Allure TestOps base URL, e.g. https://allure.example.com'
+      ALLURE_TESTOPS_API_TOKEN:
+        required: false
+        description: 'Allure TestOps API token for JWT token exchange'
 
 permissions:
   contents: read
@@ -100,16 +112,50 @@ jobs:
           upload: false
           output: sarif-results
 
+      # Checkout the security-workflow scripts repo so the enrichment script and
+      # Allure sync script are available to this runner.  Done after CodeQL analyse
+      # so the extra checkout does not affect the source snapshot already processed.
+      - name: Checkout security workflow scripts
+        uses: actions/checkout@v4
+        with:
+          repository: latrobehealth/exp-sast-security-workflows
+          ref:        main
+          path:       sast-security-scripts
+          token:      ${{ secrets.canary-token || github.token }}
+
       # Inject OWASP Top 10:2025 category IDs into tags and add clickable OWASP
       # URLs to each rule's help markdown. Python 3 is pre-installed on ubuntu-latest.
       - name: Enrich SARIF with OWASP Top 10:2025
-        run: python3 .github/scripts/enrich-sarif-owasp.py sarif-results
+        run: python3 sast-security-scripts/.github/scripts/enrich-sarif-owasp.py sarif-results
 
       - name: Upload SARIF to GitHub Advanced Security
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: sarif-results
           category: "/language:${{ matrix.language }}"
+
+      # Sync application scan results to Allure TestOps.
+      # Runs only for C# (where the OWASP test cases live) and only when
+      # allure-project-name is set.  Never fails CI (continue-on-error).
+      - name: Sync OWASP results to Allure TestOps
+        if: ${{ inputs.allure-project-name != '' && matrix.language == 'csharp' }}
+        continue-on-error: true
+        env:
+          ALLURE_TESTOPS_URL:       ${{ secrets.ALLURE_TESTOPS_URL }}
+          ALLURE_TESTOPS_API_TOKEN: ${{ secrets.ALLURE_TESTOPS_API_TOKEN }}
+        run: |
+          if [ -z "$ALLURE_TESTOPS_URL" ] || [ -z "$ALLURE_TESTOPS_API_TOKEN" ]; then
+            echo "ALLURE_TESTOPS_URL or ALLURE_TESTOPS_API_TOKEN not configured — skipping Allure sync"
+            exit 0
+          fi
+          pip install requests --quiet
+          python3 sast-security-scripts/scripts/allure-testops-sync.py \
+            --sarif      sarif-results/csharp.sarif \
+            --project    "${{ inputs.allure-project-name }}" \
+            --version    "${{ github.ref_name }}" \
+            --scan-type  application \
+            --run-id     "${{ github.run_id }}" \
+            --run-url    "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   # ── Canary scan — verifies OWASP Top 10:2025 detection coverage ─────────────
   #
@@ -165,3 +211,26 @@ jobs:
 
       - name: Verify OWASP Top 10:2025 coverage
         run: python3 sast-canary-src/canary/scripts/verify-canary.py canary-sarif/csharp.sarif
+
+      # Sync canary scan results to Allure TestOps (scanner-health project).
+      # The canary always records to the exp-sast-security-workflows project so
+      # scanner coverage history is kept separate from application security results.
+      - name: Sync canary coverage to Allure TestOps
+        if: ${{ inputs.allure-project-name != '' }}
+        continue-on-error: true
+        env:
+          ALLURE_TESTOPS_URL:       ${{ secrets.ALLURE_TESTOPS_URL }}
+          ALLURE_TESTOPS_API_TOKEN: ${{ secrets.ALLURE_TESTOPS_API_TOKEN }}
+        run: |
+          if [ -z "$ALLURE_TESTOPS_URL" ] || [ -z "$ALLURE_TESTOPS_API_TOKEN" ]; then
+            echo "ALLURE_TESTOPS_URL or ALLURE_TESTOPS_API_TOKEN not configured — skipping canary Allure sync"
+            exit 0
+          fi
+          pip install requests --quiet
+          python3 sast-canary-src/scripts/allure-testops-sync.py \
+            --sarif      canary-sarif/csharp.sarif \
+            --project    "exp-sast-security-workflows" \
+            --version    "${{ github.ref_name }}" \
+            --scan-type  canary \
+            --run-id     "${{ github.run_id }}" \
+            --run-url    "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
