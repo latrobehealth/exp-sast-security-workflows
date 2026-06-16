@@ -220,12 +220,15 @@ Runs [GitHub CodeQL](https://codeql.github.com/) static analysis, enriches the S
 | `runner` | `string` | No | `ubuntu-latest` | GitHub-hosted or self-hosted runner label |
 | `query-suite` | `string` | No | `security-extended` | `security-extended`, `security-and-quality`, or a path to a custom `.qls` suite |
 | `verify-canary` | `boolean` | No | `false` | Run the SAST canary to verify OWASP Top 10:2025 detection coverage (see [SAST Canary](#sast-canary)) |
+| `allure-project-name` | `string` | No | `""` | Allure TestOps project name for the calling repo (e.g. `exp-membership-service`). Leave empty to skip Allure sync entirely (see [Allure TestOps Integration](#allure-testops-integration)) |
 
 #### Secrets
 
 | Secret | Required | Description |
 |---|---|---|
 | `canary-token` | No | PAT with `contents:read` on `exp-sast-security-workflows`. Required only if the repo is private. Omit for internal/public repos. |
+| `ALLURE_TESTOPS_URL` | No | Allure TestOps base URL, e.g. `https://allure.example.com`. Omit to skip Allure sync. |
+| `ALLURE_TESTOPS_API_TOKEN` | No | Allure TestOps API token for authentication. Omit to skip Allure sync. |
 
 #### Permissions granted by this workflow
 
@@ -295,6 +298,21 @@ jobs:
       build-mode: autobuild
       verify-canary: true
     secrets: inherit
+```
+
+**With Allure TestOps sync:**
+
+```yaml
+jobs:
+  codeql:
+    uses: latrobehealth/exp-sast-security-workflows/.github/workflows/codeql-reusable.yml@main
+    with:
+      languages: '["csharp"]'
+      build-mode: autobuild
+      allure-project-name: my-repo-name
+    secrets:
+      ALLURE_TESTOPS_URL:       ${{ secrets.ALLURE_TESTOPS_URL }}
+      ALLURE_TESTOPS_API_TOKEN: ${{ secrets.ALLURE_TESTOPS_API_TOKEN }}
 ```
 
 ---
@@ -376,17 +394,17 @@ The canary is a self-contained .NET 9 project (`canary/`) containing **one inten
 |---|---|---|
 | A01 | `cs/path-injection` | User-controlled filename passed to `File.ReadAllText` |
 | A01 | `cs/web/missing-function-level-access-control` | Admin endpoint with no `[Authorize]` attribute |
-| A04 | `cs/use-of-broken-or-weak-cryptographic-algorithm` | `MD5.Create()` used for hashing |
+| A04 | `cs/use-of-broken-or-weak-cryptographic-algorithm` | `MD5.Create()` / `SHA1.Create()` — two independent instances |
 | A04 | `cs/hardcoded-credentials` | `NetworkCredential` with a literal password |
 | A05 | `cs/sql-injection` | EF Core `FromSqlRaw` with string concatenation |
 | A05 | `cs/command-line-injection` | `ProcessStartInfo` with user-controlled argument |
-| A05 | `cs/web/xss` | User input rendered directly as `text/html` |
+| A05 | `cs/web/xss` | User input concatenated (not interpolated) into raw HTML response |
 | A05 | `cs/web/unvalidated-url-redirect` | `Redirect(returnUrl)` without allowlist check |
-| A07/A09 | `cs/log-forging` | Credentials and bearer tokens written to log |
-| A08 | `cs/xml-injection` | `XmlDocument` with `XmlUrlResolver` (XXE) |
+| A07/A09 | `cs/log-forging` | Credentials and bearer tokens written to log via `[FromQuery]` parameters |
+| A08 | `cs/xml-injection` | XPath injection — user input in `doc.SelectSingleNode("//user[@id='"+id+"']")` |
 
-> **Bonus rules** (require `security-and-quality` suite, not counted in pass/fail):
-> `cs/stack-trace-exposure` (A02), `cs/ssrf` (A10 — coverage varies by CodeQL version)
+> **Bonus rules** (not counted in pass/fail — require `security-and-quality` suite or depend on CodeQL model version):
+> `cs/stack-trace-exposure` (A02), `cs/xml-external-entity` (A08 — XXE), `cs/ssrf` (A10)
 
 ### Enabling the canary in your pipeline
 
@@ -421,36 +439,60 @@ The canary job summary appears in the GitHub Actions run alongside the main scan
 
 ## Allure TestOps Integration
 
-[Allure TestOps](https://qameta.io/) provides a test management layer on top of CI results. Integrating it with CodeQL allows security findings to be tracked, triaged, and trended alongside functional test results in a single dashboard.
+[Allure TestOps](https://qameta.io/) provides a test management layer on top of CI results. Security findings are tracked, triaged, and trended alongside functional test results in a single dashboard. The integration is built into `codeql-reusable.yml` via `scripts/allure-testops-sync.py` — no manual upload steps required in calling repos.
 
-### Option A — GitHub Integration (recommended)
+### How it works
 
-Allure TestOps has a native GitHub integration that can pull code-scanning alerts directly via the GitHub API. No changes to the workflow files are needed.
+`scripts/allure-testops-sync.py` runs automatically inside the `analyze` job (for C# scans) and the `verify-canary` job. It:
 
-1. In Allure TestOps, go to **Administration → Integrations → GitHub**.
-2. Authorise the org (`latrobehealth`) and select the application repository.
-3. Enable **Code Scanning** as a results source and set the category filter to `/language:*` (to include all CodeQL languages) or a specific category.
-4. Allure TestOps will poll the GitHub Security API and import open code-scanning alerts as test cases, mapped to your project.
+1. **Idempotently creates or finds** the Allure TestOps project (by `allure-project-name`), OWASP test cases, and a test plan per branch/version — so repeated runs never duplicate records.
+2. **Creates a new launch** per GitHub Actions run ID, linked to the test plan, and records a result per OWASP class:
+   - `application` scan: **PASS** = zero production findings for that OWASP class; **FAIL** = findings found in production code.
+   - `canary` scan: **PASS** = expected CodeQL rule fired; **FAIL** = rule missed (scanner regression).
+3. **Never blocks CI** — all Allure sync steps use `continue-on-error: true`. Missing credentials or network failures are logged to the GitHub Actions summary without failing the scan.
 
-Findings imported this way carry the OWASP category tag (e.g. `A05:2025`) injected by the SARIF enrichment step, which Allure TestOps surfaces as test labels for filtering and reporting.
+### Setup
 
----
+Configure these secrets and variables at the **organisation** or **repository** level in GitHub:
 
-### Option B — allurectl upload (CI-driven)
-
-Use this approach if you need full control over when and what is pushed to Allure TestOps, or if the GitHub integration is not available.
-
-**Prerequisites:**
-- `allurectl` installed on the runner (see [allurectl releases](https://github.com/allure-framework/allurectl/releases))
-- Three repository secrets or variables configured:
-
-| Name | Type | Description |
+| Name | Where | Description |
 |---|---|---|
-| `ALLURE_TOKEN` | Secret | API token from Allure TestOps → Profile → API Tokens |
-| `ALLURE_ENDPOINT` | Variable | Your Allure TestOps instance URL, e.g. `https://allure.yourorg.com` |
-| `ALLURE_PROJECT_ID` | Variable | Numeric project ID from the Allure TestOps project settings |
+| `ALLURE_TESTOPS_URL` | Secret | Your Allure TestOps base URL, e.g. `https://allure.yourorg.com` |
+| `ALLURE_TESTOPS_API_TOKEN` | Secret | API token from Allure TestOps → Profile → API Tokens |
 
-**Add these steps to your calling workflow after the `codeql` job:**
+### Enable in your workflow
+
+Pass `allure-project-name` with the name of your Allure TestOps project (it will be created automatically if it does not exist):
+
+```yaml
+# .github/workflows/security-sast.yml
+name: Security — SAST
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  codeql:
+    uses: latrobehealth/exp-sast-security-workflows/.github/workflows/codeql-reusable.yml@main
+    with:
+      languages: '["csharp"]'
+      build-mode: autobuild
+      allure-project-name: exp-membership-service   # matches your Allure project name
+    secrets:
+      ALLURE_TESTOPS_URL:       ${{ secrets.ALLURE_TESTOPS_URL }}
+      ALLURE_TESTOPS_API_TOKEN: ${{ secrets.ALLURE_TESTOPS_API_TOKEN }}
+```
+
+Omit `allure-project-name` (or leave it empty) to skip the Allure sync entirely — no secrets are required in that case.
+
+### With canary enabled
+
+When `verify-canary: true` is also set, a second Allure sync runs for the canary results under the fixed project name `exp-sast-security-workflows`, keeping scanner-health history separate from application security results:
 
 ```yaml
 jobs:
@@ -459,82 +501,22 @@ jobs:
     with:
       languages: '["csharp"]'
       build-mode: autobuild
-    secrets: inherit
-
-  upload-to-allure:
-    needs: codeql
-    runs-on: ubuntu-latest
-    if: always()   # upload even when CodeQL finds issues
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download allurectl
-        run: |
-          curl -sSLo allurectl https://github.com/allure-framework/allurectl/releases/latest/download/allurectl_linux_amd64
-          chmod +x allurectl
-
-      - name: Convert SARIF to Allure format
-        run: |
-          pip install sarif-tools
-          python3 - <<'EOF'
-          import json, pathlib, uuid
-
-          sarif_dir = pathlib.Path("sarif-results")
-          out_dir = pathlib.Path("allure-results")
-          out_dir.mkdir(exist_ok=True)
-
-          for sarif_file in sarif_dir.rglob("*.sarif"):
-              data = json.loads(sarif_file.read_text())
-              for run in data.get("runs", []):
-                  for result in run.get("results", []):
-                      rule_id = result.get("ruleId", "unknown")
-                      level   = result.get("level", "warning")
-                      msg     = result.get("message", {}).get("text", "")
-                      loc     = result.get("locations", [{}])[0]
-                      uri     = loc.get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
-                      line    = loc.get("physicalLocation", {}).get("region", {}).get("startLine", 0)
-
-                      # Map SARIF level to Allure status
-                      status = "failed" if level == "error" else "broken"
-
-                      allure_result = {
-                          "uuid":        str(uuid.uuid4()),
-                          "name":        rule_id,
-                          "status":      status,
-                          "description": msg,
-                          "labels": [
-                              {"name": "suite",    "value": "SAST / CodeQL"},
-                              {"name": "tag",      "value": rule_id},
-                          ],
-                          "parameters": [
-                              {"name": "file", "value": f"{uri}:{line}"}
-                          ],
-                      }
-                      # Propagate OWASP tag from enriched SARIF if present
-                      rules = run.get("tool", {}).get("driver", {}).get("rules", [])
-                      rule_meta = next((r for r in rules if r.get("id") == rule_id), {})
-                      for tag in rule_meta.get("properties", {}).get("tags", []):
-                          if tag.startswith("A") and ":2025" in tag:
-                              allure_result["labels"].append({"name": "tag", "value": tag})
-
-                      out_file = out_dir / f"{allure_result['uuid']}-result.json"
-                      out_file.write_text(json.dumps(allure_result, indent=2))
-          EOF
-
-      - name: Upload results to Allure TestOps
-        env:
-          ALLURE_TOKEN:      ${{ secrets.ALLURE_TOKEN }}
-          ALLURE_ENDPOINT:   ${{ vars.ALLURE_ENDPOINT }}
-          ALLURE_PROJECT_ID: ${{ vars.ALLURE_PROJECT_ID }}
-        run: |
-          ./allurectl upload \
-            --project-id "$ALLURE_PROJECT_ID" \
-            --endpoint    "$ALLURE_ENDPOINT" \
-            --token       "$ALLURE_TOKEN" \
-            allure-results/
+      allure-project-name: exp-membership-service
+      verify-canary: true
+    secrets:
+      ALLURE_TESTOPS_URL:       ${{ secrets.ALLURE_TESTOPS_URL }}
+      ALLURE_TESTOPS_API_TOKEN: ${{ secrets.ALLURE_TESTOPS_API_TOKEN }}
 ```
 
-> **Note on `sarif-results/`:** The CodeQL reusable workflow saves SARIF to `sarif-results/` before uploading to GitHub. Those files are not available to downstream jobs via the default workspace because the reusable workflow runs in its own job context. Use `actions/upload-artifact` and `actions/download-artifact` to pass SARIF between jobs if needed, or run the Allure upload as an additional step in a single calling job that wraps both scans.
+### What appears in Allure TestOps
+
+| Allure concept | What it maps to |
+|---|---|
+| **Project** | Your repo / `allure-project-name` value |
+| **Test cases** | One per OWASP Top 10:2025 class (A01–A10), tagged `OWASP-A0x`, `CodeQL`, `SAST` |
+| **Test plan** | One per branch (e.g. `main`, `feature/auth-rewrite`) |
+| **Launch** | One per GitHub Actions run — linked to the test plan |
+| **Test result** | PASS / FAIL per OWASP class based on whether findings exist in production code |
 
 ---
 
@@ -561,7 +543,7 @@ The following OWASP Top 10:2025 categories require controls outside this reposit
 │   ├── scripts/
 │   │   └── enrich-sarif-owasp.py          # Injects OWASP tags into SARIF before upload
 │   └── workflows/
-│       ├── codeql-reusable.yml            # CodeQL SAST + SARIF enrichment + canary
+│       ├── codeql-reusable.yml            # CodeQL SAST + SARIF enrichment + Allure sync + canary
 │       └── dependency-review-reusable.yml # Dependency CVE and licence scan
 ├── canary/
 │   ├── Controllers/
@@ -572,6 +554,8 @@ The following OWASP Top 10:2025 categories require controls outside this reposit
 │   │   └── verify-canary.py              # Asserts all expected CodeQL rules fired
 │   ├── Program.cs
 │   └── Sast.Canary.csproj
+├── scripts/
+│   └── allure-testops-sync.py            # Idempotent SARIF → Allure TestOps sync
 └── README.md
 ```
 
