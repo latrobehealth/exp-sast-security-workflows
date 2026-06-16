@@ -1,33 +1,71 @@
 # org/security-workflows/.github/workflows/codeql-reusable.yml
 #
-# OWASP Top 10 2025 coverage (security-extended query suite):
-#   A01 – Broken Access Control       (path traversal, LDAP/XPath injection bypass)
-#   A04 – Cryptographic Failures      (weak algorithms, insecure RNG, hardcoded secrets)
-#   A05 – Injection                   (SQL, command, XSS, path, template, LDAP injection)
-#   A07 – Authentication Failures     (hardcoded credentials, weak authentication patterns)
-#   A08 – Software/Data Integrity     (unsafe deserialization, unsafe reflection)
-#   A10 – Improper Error Handling     (information leakage via exceptions)
+# OWASP Top 10:2025 coverage (security-extended query suite):
+#   A01 – Broken Access Control       (path traversal, missing access control, IDOR)
+#   A02 – Cryptographic Failures      (weak algorithms, hardcoded credentials)
+#   A03 – Injection                   (SQL, command, XSS, path, log forging)
+#   A05 – Security Misconfiguration   (unvalidated redirect, stack trace exposure)
+#   A07 – Authentication Failures     (credential logging, token exposure)
+#   A08 – Software/Data Integrity     (XXE via XmlUrlResolver)
+#   A09 – Logging Failures            (log injection / forging)
+#   A10 – SSRF                        (HttpClient with user-controlled URL)
 #
-# Not covered by CodeQL alone — see complementary workflows / notes in README:
-#   A02 – Security Misconfiguration   (use IaC scanning: Checkov / Trivy)
-#   A03 – Supply Chain Failures       (use dependency-review-reusable.yml + Dependabot)
-#   A06 – Insecure Design             (requires threat modelling and architecture review)
-#   A09 – Logging & Alerting Failures (runtime monitoring; not detectable via SAST)
+# Not covered by CodeQL alone — see complementary workflows / README:
+#   A04 – Insecure Design             (requires threat modelling and architecture review)
+#   A06 – Vulnerable Components       (use dependency-review-reusable.yml + Dependabot)
+#
+# ── Canary job ────────────────────────────────────────────────────────────────
+# Set verify-canary: true when calling this workflow to run the SAST canary.
+# The canary compiles and analyses latrobehealth/exp-sast-security-workflows/canary/
+# (a self-contained project with one intentional vulnerability per OWASP class)
+# and uploads the results to the calling repo's Security tab under the
+# category "/language:csharp/sast-canary" so they are clearly distinguished
+# from real findings.  The Python verification step then asserts every expected
+# rule fired and writes a coverage table to the job summary.
+#
+# Cross-repo checkout requirement:
+#   The verify-canary job checks out exp-sast-security-workflows from within the
+#   calling repo's CI run.  Pass an org-level secret (contents:read on this repo)
+#   as `canary-token`.  For organisations that grant "internal" visibility to all
+#   members the default GITHUB_TOKEN is sufficient — omit canary-token in that case.
 name: CodeQL (reusable)
+
 on:
   workflow_call:
     inputs:
-      languages:    { type: string, required: true }   # JSON array
-      build-mode:   { type: string, default: "none" }
-      runner:       { type: string, default: "ubuntu-latest" }
-      query-suite:  { type: string, default: "security-extended" }
+      languages:
+        type: string
+        required: true
+        description: 'JSON array of CodeQL languages, e.g. ["csharp","javascript-typescript"]'
+      build-mode:
+        type: string
+        default: "none"
+        description: '"none" | "autobuild" | "manual"'
+      runner:
+        type: string
+        default: "ubuntu-latest"
+      query-suite:
+        type: string
+        default: "security-extended"
+        description: 'CodeQL query suite identifier'
+      verify-canary:
+        type: boolean
+        default: false
+        description: 'Run the SAST canary to verify OWASP Top 10:2025 detection coverage'
+    secrets:
+      canary-token:
+        required: false
+        description: >
+          PAT with contents:read on latrobehealth/exp-sast-security-workflows.
+          Required only when the repo is private.  Omit for internal/public repos.
 
 permissions:
   contents: read
-  security-events: write     # upload SARIF
+  security-events: write   # upload SARIF
   packages: read
 
 jobs:
+  # ── Primary scan — analyses the calling repository ──────────────────────────
   analyze:
     runs-on: ${{ inputs.runner }}
     strategy:
@@ -40,12 +78,11 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ inputs.build-mode }}
-          queries: ${{ inputs.query-suite }}
+          languages:   ${{ matrix.language }}
+          build-mode:  ${{ inputs.build-mode }}
+          queries:     ${{ inputs.query-suite }}
 
-      # Manual build example (only when build-mode: manual)
-      - name: Build (.NET manual mode)
+      - name: Build (.NET — manual mode only)
         if: ${{ inputs.build-mode == 'manual' && matrix.language == 'csharp' }}
         run: dotnet build --configuration Release /p:UseSharedCompilation=false
 
@@ -53,3 +90,58 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+
+  # ── Canary scan — verifies OWASP Top 10:2025 detection coverage ─────────────
+  #
+  # Runs only when the caller sets verify-canary: true.
+  # 1. Checks out exp-sast-security-workflows/canary/ — a self-contained project
+  #    with one intentional vulnerability per OWASP class.
+  # 2. Runs CodeQL and uploads results under category "sast-canary" so alerts
+  #    are clearly distinguished from real findings on the Security tab.
+  # 3. Runs verify-canary.py which asserts all expected rules fired and writes
+  #    a coverage table to the GitHub Actions job summary.
+  verify-canary:
+    name: Verify OWASP Canary
+    if: ${{ inputs.verify-canary == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout SAST canary code
+        uses: actions/checkout@v4
+        with:
+          repository: latrobehealth/exp-sast-security-workflows
+          ref:        main
+          path:       sast-canary-src
+          # canary-token: org PAT (contents:read) required for private repos;
+          # safe to omit when exp-sast-security-workflows is internal/public.
+          token: ${{ secrets.canary-token || github.token }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Initialize CodeQL (canary)
+        uses: github/codeql-action/init@v3
+        with:
+          languages:   csharp
+          queries:     ${{ inputs.query-suite }}
+          source-root: sast-canary-src/canary
+
+      - name: Build canary project
+        run: dotnet build sast-canary-src/canary/Sast.Canary.csproj --configuration Release
+
+      - name: Perform CodeQL Analysis (canary)
+        uses: github/codeql-action/analyze@v3
+        with:
+          # Upload under a distinct category so canary alerts appear separately
+          # from real findings in the Security → Code Scanning tab.
+          # Filter by category "sast-canary" or path "sast-canary-src/**" to isolate them.
+          category: "/language:csharp/sast-canary"
+          output:   canary-sarif
+
+      - name: Verify OWASP Top 10:2025 coverage
+        run: python3 sast-canary-src/canary/scripts/verify-canary.py canary-sarif/csharp.sarif

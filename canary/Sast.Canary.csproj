@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Sast.Canary</RootNamespace>
+    <!--
+      SAST CANARY — compiled for CodeQL analysis only.
+      Contains intentional OWASP Top 10:2025 vulnerabilities to verify the
+      security-extended query suite detects each class.  NEVER deploy this project.
+    -->
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- InMemory: lets Program.cs wire DI without a real DB server -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.*" />
+    <!-- Relational: provides FromSqlRaw used for the SQL-injection canary pattern -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.*" />
+  </ItemGroup>
+</Project>
