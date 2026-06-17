@@ -80,6 +80,7 @@ on:
 permissions:
   contents: read
   security-events: write   # upload SARIF
+  actions: read
   packages: read
 
 jobs:
