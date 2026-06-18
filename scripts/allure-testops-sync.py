@@ -566,7 +566,7 @@ def upload_results_to_launch(
         })
         files: list = [("info", (None, info, "application/json"))]
         for f in result_files:
-            files.append(("allure-results", (f.name, f.read_bytes(), "application/json")))
+            files.append(("results", (f.name, f.read_bytes(), "application/json")))
         resp = requests.post(
             f"{client.base}/api/rs/launch/upload",
             files=files,
