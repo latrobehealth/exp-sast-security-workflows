@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "dgSpecHash": "hbysjHTSHUs=",
+  "success": true,
+  "projectFilePath": "C:\\niro-projects\\experimental\\exp-sast-security-workflows\\canary\\Sast.Canary.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.entityframeworkcore\\9.0.17\\microsoft.entityframeworkcore.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.entityframeworkcore.abstractions\\9.0.17\\microsoft.entityframeworkcore.abstractions.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\9.0.17\\microsoft.entityframeworkcore.analyzers.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.entityframeworkcore.inmemory\\9.0.17\\microsoft.entityframeworkcore.inmemory.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.entityframeworkcore.relational\\9.0.17\\microsoft.entityframeworkcore.relational.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.caching.abstractions\\9.0.17\\microsoft.extensions.caching.abstractions.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.caching.memory\\9.0.17\\microsoft.extensions.caching.memory.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\9.0.17\\microsoft.extensions.configuration.abstractions.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.dependencyinjection\\9.0.17\\microsoft.extensions.dependencyinjection.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\9.0.17\\microsoft.extensions.dependencyinjection.abstractions.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.logging\\9.0.17\\microsoft.extensions.logging.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\9.0.17\\microsoft.extensions.logging.abstractions.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.options\\9.0.17\\microsoft.extensions.options.9.0.17.nupkg.sha512",
+    "C:\\Users\\nrp\\.nuget\\packages\\microsoft.extensions.primitives\\9.0.17\\microsoft.extensions.primitives.9.0.17.nupkg.sha512"
+  ],
+  "logs": []
+}

@@ -34,7 +34,7 @@
 #   calling repo's CI run.  Pass an org-level secret (contents:read on this repo)
 #   as `canary-token`.  For organisations that grant "internal" visibility to all
 #   members the default GITHUB_TOKEN is sufficient — omit canary-token in that case.
-name: CodeQL (reusable)
+name: OWASP Top 10:2025 Security Coverage
 
 on:
   workflow_call:
