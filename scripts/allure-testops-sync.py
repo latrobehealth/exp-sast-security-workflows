@@ -249,12 +249,12 @@ class AllureClient:
     def post(self, path: str, body: dict | None = None) -> dict:
         resp = self._s.post(f"{self.base}{path}", json=body, timeout=30)
         resp.raise_for_status()
-        return resp.json()
+        return resp.json() if resp.text.strip() else {}
 
     def patch(self, path: str, body: dict) -> dict:
         resp = self._s.patch(f"{self.base}{path}", json=body, timeout=30)
         resp.raise_for_status()
-        return resp.json()
+        return resp.json() if resp.text.strip() else {}
 
 
 # ── Idempotent entity helpers ─────────────────────────────────────────────────
@@ -363,13 +363,16 @@ def get_or_create_test_plan(
 def link_cases_to_plan(
     client: AllureClient, plan_id: int, tc_ids: list[int]
 ) -> None:
-    """Attach test cases to a test plan. Tries two known endpoint shapes."""
-    for body in (
-        {"testCasesIds": tc_ids},
-        {"ids": tc_ids},
-    ):
+    """Attach test cases to a test plan. Tries several known endpoint shapes."""
+    attempts = [
+        lambda: client.post(f"/api/testplan/{plan_id}/test-cases", {"testCasesIds": tc_ids}),
+        lambda: client.post(f"/api/testplan/{plan_id}/test-cases", {"ids": tc_ids}),
+        lambda: client.post(f"/api/v2/testplan/{plan_id}/test-cases", {"testCasesIds": tc_ids}),
+        lambda: client.patch(f"/api/testplan/{plan_id}", {"testCasesIds": tc_ids}),
+    ]
+    for attempt in attempts:
         try:
-            client.post(f"/api/testplan/{plan_id}/test-cases", body)
+            attempt()
             _log(f"  linked {len(tc_ids)} test cases to plan {plan_id}")
             return
         except Exception:
@@ -534,6 +537,8 @@ def upload_results_to_launch(
     client: AllureClient,
     launch_id: int,
     result_files: list[Path],
+    project_id: int = 0,
+    launch_name: str = "",
 ) -> bool:
     """
     Upload Allure 2 JSON result files to an open launch.
@@ -554,10 +559,14 @@ def upload_results_to_launch(
     # Approach 2: multipart /api/rs/launch/upload (community-documented path)
     try:
         auth_header = client._s.headers.get("Authorization", "")
-        info = json.dumps({"id": launch_id})
+        info = json.dumps({
+            "id":        launch_id,
+            "name":      launch_name or f"launch-{launch_id}",
+            "projectId": project_id or None,
+        })
         files: list = [("info", (None, info, "application/json"))]
         for f in result_files:
-            files.append(("allure-results", (f.name, f.read_bytes(), "application/json")))
+            files.append(("results", (f.name, f.read_bytes(), "application/json")))
         resp = requests.post(
             f"{client.base}/api/rs/launch/upload",
             files=files,
@@ -784,7 +793,9 @@ def main() -> int:
         _log(f"  launch created: id={launch_id}")
 
         _log("\nUploading results ...")
-        upload_ok = upload_results_to_launch(client, launch_id, result_files)
+        upload_ok = upload_results_to_launch(
+            client, launch_id, result_files, project_id, launch_name
+        )
 
         if plan_id:
             link_launch_to_plan(client, launch_id, plan_id)

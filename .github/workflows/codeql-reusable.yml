@@ -80,6 +80,7 @@ on:
 permissions:
   contents: read
   security-events: write   # upload SARIF
+  actions: read
   packages: read
 
 jobs:
@@ -173,6 +174,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read
 
     steps:
       - name: Checkout SAST canary code
