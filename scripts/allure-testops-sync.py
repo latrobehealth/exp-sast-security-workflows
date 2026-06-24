@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import uuid
@@ -85,10 +86,10 @@ OWASP_TEST_CASES: list[dict] = [
     },
     {
         "externalId":    "codeql-cs-weak-crypto",
-        "name":          "A02 — Weak Cryptographic Algorithm (cs/use-of-broken-or-weak-cryptographic-algorithm)",
+        "name":          "A02 — Weak Cryptographic Algorithm (cs/weak-encryption)",
         "owasp":         "A02:2025",
         "owaspCategory": "Cryptographic Failures",
-        "rule":          "cs/use-of-broken-or-weak-cryptographic-algorithm",
+        "rule":          "cs/weak-encryption",
         "severity":      "high",
         "tags":          ["OWASP-A02", "CodeQL", "SAST", "security-extended"],
         "owaspUrl":      "https://owasp.org/Top10/A02_2025-Cryptographic_Failures/",
@@ -156,10 +157,10 @@ OWASP_TEST_CASES: list[dict] = [
     },
     {
         "externalId":    "codeql-cs-unvalidated-redirect",
-        "name":          "A05 — Unvalidated Redirect (cs/web/unvalidated-url-redirect)",
+        "name":          "A05 — Unvalidated Redirect (cs/web/unvalidated-url-redirection)",
         "owasp":         "A05:2025",
         "owaspCategory": "Security Misconfiguration",
-        "rule":          "cs/web/unvalidated-url-redirect",
+        "rule":          "cs/web/unvalidated-url-redirection",
         "severity":      "medium",
         "tags":          ["OWASP-A05", "CodeQL", "SAST", "security-extended"],
         "owaspUrl":      "https://owasp.org/Top10/A05_2025-Security_Misconfiguration/",
@@ -184,10 +185,10 @@ OWASP_TEST_CASES: list[dict] = [
     },
     {
         "externalId":    "codeql-cs-xpath-injection",
-        "name":          "A08 — XPath Injection (cs/xml-injection)",
+        "name":          "A08 — XPath Injection (cs/xml/xpath-injection)",
         "owasp":         "A08:2025",
         "owaspCategory": "Software and Data Integrity Failures",
-        "rule":          "cs/xml-injection",
+        "rule":          "cs/xml/xpath-injection",
         "severity":      "high",
         "tags":          ["OWASP-A08", "CodeQL", "SAST", "security-extended"],
         "owaspUrl":      "https://owasp.org/Top10/A08_2025-Software_and_Data_Integrity_Failures/",
@@ -533,19 +534,61 @@ def create_launch(
     return launch["id"]
 
 
+def _upload_via_allurectl(
+    allurectl_path: str,
+    endpoint: str,
+    token: str,
+    project_id: int,
+    launch_id: int,
+    results_dir: Path,
+) -> bool:
+    """Upload result files to an existing launch using allurectl binary."""
+    cmd = [
+        allurectl_path, "upload",
+        "--endpoint",   endpoint,
+        "--token",      token,
+        "--project-id", str(project_id),
+        "--launch-id",  str(launch_id),
+        str(results_dir),
+    ]
+    _log(f"  running allurectl upload (token hidden) ...")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.stdout.strip():
+        _log(result.stdout)
+    if result.stderr.strip():
+        _log(result.stderr)
+    if result.returncode != 0:
+        _log(f"  [warn] allurectl exited with code {result.returncode}")
+        return False
+    _log(f"  allurectl upload succeeded")
+    return True
+
+
 def upload_results_to_launch(
     client: AllureClient,
     launch_id: int,
     result_files: list[Path],
     project_id: int = 0,
     launch_name: str = "",
+    allurectl_path: str = "",
 ) -> bool:
     """
     Upload Allure 2 JSON result files to an open launch.
-    Tries two endpoint shapes — gracefully returns False on failure.
+    Tries allurectl first (if provided), then two REST endpoint shapes.
+    Gracefully returns False on failure.
     """
     if not result_files:
         return False
+
+    # Approach 0: allurectl (reliable — preferred when binary is available)
+    if allurectl_path:
+        results_dir = result_files[0].parent
+        base_url = client.base
+        token = client._s.headers.get("Authorization", "").removeprefix("Bearer ")
+        ok = _upload_via_allurectl(allurectl_path, base_url, token, project_id, launch_id, results_dir)
+        if ok:
+            return True
+        _log("  [warn] allurectl upload failed — falling through to REST approaches")
 
     # Approach 1: JSON body with inline results array
     try:
@@ -683,6 +726,8 @@ def parse_args() -> argparse.Namespace:
                    help="GitHub Actions run URL (added as a link to each result)")
     p.add_argument("--results-dir", default="./allure-results",
                    help="Directory for Allure 2 result JSON files (default: ./allure-results)")
+    p.add_argument("--allurectl",    default="",
+                   help="Path to allurectl binary (preferred upload method)")
     return p.parse_args()
 
 
@@ -794,7 +839,8 @@ def main() -> int:
 
         _log("\nUploading results ...")
         upload_ok = upload_results_to_launch(
-            client, launch_id, result_files, project_id, launch_name
+            client, launch_id, result_files, project_id, launch_name,
+            allurectl_path=args.allurectl,
         )
 
         if plan_id:
