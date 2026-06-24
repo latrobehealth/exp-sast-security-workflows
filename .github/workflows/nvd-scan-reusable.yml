@@ -1,0 +1,166 @@
+# .github/workflows/nvd-scan-reusable.yml
+#
+# NIST SP 800-53 Rev 5 controls covered:
+#   SA-11 — Developer Security Testing (NVD-based CVE scan of runtime dependencies)
+#   SI-2  — Flaw Remediation           (identifies packages with known vulnerabilities)
+#   SI-3  — Malicious Code Protection  (detects packages with code-level CVEs)
+#
+# Scans every NuGet PackageReference in --projects-dir against the NIST National
+# Vulnerability Database (NVD) 2.0 API and emits one Allure JSON result file per
+# package.  Results are uploaded to Allure TestOps (optional) and saved as a
+# GitHub Actions artifact.
+#
+# Rate limits:
+#   No NVD_API_KEY : 5 req / 30 s  (~7 s between requests)
+#   With NVD_API_KEY: 50 req / 30 s (~0.7 s between requests)
+# Set NVD_API_KEY as a repository secret to use the higher quota.
+# Request a free key at https://nvd.nist.gov/developers/request-an-api-key
+#
+# Fail logic:
+#   Exit 0 — all packages scanned; no CVEs at or above fail-on-cvss (default 9.0)
+#   Exit 1 — one or more CVEs at or above fail-on-cvss (CRITICAL by default)
+name: NIST SP 800-53 — NVD Dependency Vulnerability Scan
+
+on:
+  workflow_call:
+    inputs:
+      projects-dir:
+        type: string
+        default: 'src'
+        description: 'Root directory containing .csproj files, relative to repo root'
+      cvss-threshold:
+        type: number
+        default: 7.0
+        description: 'Report CVEs at or above this CVSS base score in Allure results'
+      fail-on-cvss:
+        type: number
+        default: 9.0
+        description: 'Fail CI (exit 1) if any CVE is at or above this CVSS base score'
+      allure-project-id:
+        type: number
+        default: 0
+        description: 'Allure TestOps project ID. Set to 0 to skip Allure upload.'
+      allure-plan-name:
+        type: string
+        default: ''
+        description: 'Test plan name in Allure TestOps to link the launch to'
+      runner:
+        type: string
+        default: 'ubuntu-latest'
+        description: 'GitHub-hosted or self-hosted runner label'
+    secrets:
+      NVD_API_KEY:
+        required: false
+        description: >
+          Free NVD API key for the higher 50 req/30 s rate limit.
+          Omit to use the unauthenticated 5 req/30 s limit (slower for large repos).
+          Request at https://nvd.nist.gov/developers/request-an-api-key
+      ALLURE_TESTOPS_URL:
+        required: false
+        description: 'Allure TestOps base URL, e.g. https://allure.example.com'
+      ALLURE_TESTOPS_API_TOKEN:
+        required: false
+        description: 'Allure TestOps API token for authentication'
+
+permissions:
+  contents: read
+
+jobs:
+  nvd-scan:
+    name: NVD Dependency Vulnerability Scan
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout calling repository
+        uses: actions/checkout@v4
+
+      # Check out this repo so nvd-dependency-scan.py and nist-control-map.json
+      # are available without requiring the calling repo to carry copies.
+      - name: Checkout security workflow scripts
+        uses: actions/checkout@v4
+        with:
+          repository: latrobehealth/exp-sast-security-workflows
+          ref:        main
+          path:       sast-security-scripts
+          token:      ${{ github.token }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install requests --quiet
+
+      - name: Create Allure results directory and write config
+        run: |
+          mkdir -p allure-results/nvd
+          cat <<EOF > allure-nvd-config.json
+          {
+            "allure": {
+              "directory": "$GITHUB_WORKSPACE/allure-results/nvd",
+              "links": [
+                "https://github.com/$GITHUB_REPOSITORY/issues/{issue}",
+                "https://nvd.nist.gov/vuln/detail/{nvd}"
+              ]
+            }
+          }
+          EOF
+
+      - name: Run NVD dependency vulnerability scan
+        run: >
+          python3 sast-security-scripts/scripts/nvd-dependency-scan.py
+          --projects-dir ${{ inputs.projects-dir }}
+          --results-dir  allure-results/nvd
+          --cvss-threshold ${{ inputs.cvss-threshold }}
+          --fail-on-cvss   ${{ inputs.fail-on-cvss }}
+          --nist-map       sast-security-scripts/scripts/nist-control-map.json
+        env:
+          NVD_API_KEY:   ${{ secrets.NVD_API_KEY }}
+          ALLURE_CONFIG: ${{ github.workspace }}/allure-nvd-config.json
+
+      - name: Verify NVD result files
+        if: always()
+        run: |
+          count=$(find allure-results/nvd/ -name "*.json" 2>/dev/null | wc -l)
+          echo "NVD Allure result files: $count"
+          [ "$count" -gt 0 ] && find allure-results/nvd/ -name "*.json" | head -5 || true
+
+      - name: Upload NVD scan results to Allure TestOps
+        if: always()
+        run: |
+          if [ -z "$ALLURE_TESTOPS_URL" ] || [ -z "$ALLURE_TESTOPS_API_TOKEN" ]; then
+            echo "Allure credentials not configured — skipping upload"
+            exit 0
+          fi
+          if [ "${{ inputs.allure-project-id }}" -le "0" ]; then
+            echo "allure-project-id is 0 — skipping upload"
+            exit 0
+          fi
+          if [ -z "${{ inputs.allure-plan-name }}" ]; then
+            echo "allure-plan-name not set — skipping upload"
+            exit 0
+          fi
+          curl -sSL https://github.com/allure-framework/allurectl/releases/latest/download/allurectl_linux_amd64 \
+            -o /usr/local/bin/allurectl
+          chmod +x /usr/local/bin/allurectl
+          pip install requests --quiet
+          python3 sast-security-scripts/scripts/allure-upload-results.py \
+            --results-dir  "${{ github.workspace }}/allure-results/nvd" \
+            --launch-name  "NVD Dependency Scan — ${{ github.ref_name }} #${{ github.run_number }}" \
+            --plan-name    "${{ inputs.allure-plan-name }}" \
+            --project-id   ${{ inputs.allure-project-id }} \
+            --run-url      "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --allurectl    /usr/local/bin/allurectl
+        env:
+          ALLURE_TESTOPS_URL:       ${{ secrets.ALLURE_TESTOPS_URL }}
+          ALLURE_TESTOPS_API_TOKEN: ${{ secrets.ALLURE_TESTOPS_API_TOKEN }}
+        continue-on-error: true
+
+      - name: Upload NVD results artifact (30-day retention)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-nvd-results
+          path: allure-results/nvd/
+          if-no-files-found: ignore
+          retention-days: 30
