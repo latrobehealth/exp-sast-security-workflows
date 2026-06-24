@@ -92,15 +92,19 @@ public sealed class SastCanaryController : ControllerBase
     /// <summary>
     /// A02-b  Hardcoded credential passed to a network authentication API.
     /// Rule: cs/hardcoded-credentials
-    /// Pattern: literal string password argument to NetworkCredential constructor.
-    /// NetworkCredential is a known CodeQL-tracked auth API.
-    /// Previous non-detection was a const-string field; this uses a live constructor call.
+    /// Pattern: literal string password flows to HttpClientHandler.Credentials
+    /// Using HttpClientHandler ensures the credential flows into a real HTTP
+    /// authentication context that CodeQL's C# taint models track.
     /// </summary>
     [HttpGet("a02/connect")]
     public IActionResult HardcodedCredential()
     {
-        var cred = new NetworkCredential("sa", "Hardcoded@Pass2025!");
-        return Ok(cred.UserName);
+        var handler = new HttpClientHandler
+        {
+            Credentials = new NetworkCredential("sa", "Hardcoded@Pass2025!")
+        };
+        using var client = new HttpClient(handler);
+        return Ok("connected");
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -143,13 +147,16 @@ public sealed class SastCanaryController : ControllerBase
     /// <summary>
     /// A03-c  Reflected XSS.
     /// Rule: cs/web/xss
-    /// Pattern: [FromQuery] string → string concatenation → Content("text/html")
-    /// Uses concatenation rather than interpolation because compiler-synthesised
-    /// variables in interpolated strings can break CodeQL's taint graph.
+    /// Pattern: [FromQuery] string → HttpResponse.WriteAsync (direct HTML write)
+    /// ContentResult is NOT a tracked XSS sink in CodeQL C# — must write directly
+    /// to HttpResponse to hit the tracked sink.
     /// </summary>
     [HttpGet("a03/greet")]
-    public ContentResult Greet([FromQuery] string name)
-        => Content("<h1>Hello " + name + "</h1>", "text/html");
+    public async Task Greet([FromQuery] string name)
+    {
+        Response.ContentType = "text/html";
+        await Response.WriteAsync("<h1>Hello " + name + "</h1>");
+    }
 
     // ══════════════════════════════════════════════════════════════════════════════
     // A05 — Security Misconfiguration
