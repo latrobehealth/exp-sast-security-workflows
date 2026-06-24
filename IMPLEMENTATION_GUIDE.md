@@ -1294,3 +1294,69 @@ This prevents an unreviewed commit to this repo from affecting production CI run
 ---
 
 *This guide is maintained by the Security Engineering team. For questions, raise an issue in `latrobehealth/exp-sast-security-workflows` or contact the Security Engineering team directly.*
+
+---
+
+## 9. NVD Dependency Vulnerability Scanning (NIST SP 800-53)
+
+### 9.1 Overview
+
+The  workflow adds a third security track complementing CodeQL SAST and Dependency Review. It queries the [NIST National Vulnerability Database 2.0 API](https://services.nvd.nist.gov/rest/json/cves/2.0) for every NuGet  in the repository's  files.
+
+**Scope:** .NET / NuGet packages only. For other ecosystems, use  or Dependabot.
+
+**NIST SP 800-53 Rev 5 controls mapped:**
+
+| Control | Family | What it covers |
+|---|---|---|
+| SA-11 | System and Services Acquisition | Developer security testing — automated CVE check at build time |
+| SI-2  | System and Information Integrity | Flaw remediation — identifies packages with unpatched known vulnerabilities |
+| SI-3  | System and Information Integrity | Malicious code protection — flags packages with code-level security CVEs |
+
+### 9.2 How It Works
+
+
+
+### 9.3 NVD API Rate Limits
+
+| Credential | Rate limit | Approx. time for 25 packages |
+|---|---|---|
+| No API key | 5 req / 30 s | ~3 minutes |
+| With  | 50 req / 30 s | ~18 seconds |
+
+Add  as a GitHub Actions repository secret. Request a free key at [nvd.nist.gov/developers/request-an-api-key](https://nvd.nist.gov/developers/request-an-api-key).
+
+On a 429 response the scanner automatically retries after 35 seconds.
+
+### 9.4 Relevance Filtering
+
+NVD keyword search returns false positives for short or common package names (e.g. searching for  may return CVEs for unrelated projects). The  function filters results by requiring the package name to appear in the CVE description text or a CVE reference URL.
+
+### 9.5 Allure Result Schema
+
+Each result file follows the Allure JSON schema:
+
+| Field | Value |
+|---|---|
+|  |  or  |
+|  |  or  |
+|  |  — stable across runs for TestOps trending |
+|  | , , ,  |
+|  | , ,  |
+|  | One step per CVE above threshold: CVE ID, CVSS score, severity, description (first 400 chars), CWE IDs |
+
+The stable  (deterministic MD5 of the package name) allows Allure TestOps to track CVE status for each package over time, independent of the UUID assigned to each scan run.
+
+### 9.6 Adopting the Workflow
+
+Add the following job to your repo's :
+
+
+
+Required secrets (org-level or repo-level):
+
+| Secret | Purpose |
+|---|---|
+|  | Higher NVD rate limit (optional but strongly recommended) |
+|  | Allure upload (optional — skip upload if absent) |
+|  | Allure upload (optional — skip upload if absent) |
