@@ -149,6 +149,8 @@ jobs:
             echo "ALLURE_TESTOPS_URL or ALLURE_TESTOPS_API_TOKEN not configured — skipping Allure sync"
             exit 0
           fi
+          curl -sSL https://github.com/allure-framework/allurectl/releases/latest/download/allurectl_linux_amd64 \
+            -o /usr/local/bin/allurectl && chmod +x /usr/local/bin/allurectl
           pip install requests --quiet
           python3 sast-security-scripts/scripts/allure-testops-sync.py \
             --sarif      sarif-results/csharp.sarif \
@@ -156,7 +158,8 @@ jobs:
             --version    "${{ github.ref_name }}" \
             --scan-type  application \
             --run-id     "${{ github.run_id }}" \
-            --run-url    "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --run-url    "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --allurectl  /usr/local/bin/allurectl
 
   # ── Canary scan — verifies OWASP Top 10:2025 detection coverage ─────────────
   #
@@ -228,6 +231,8 @@ jobs:
             echo "ALLURE_TESTOPS_URL or ALLURE_TESTOPS_API_TOKEN not configured — skipping canary Allure sync"
             exit 0
           fi
+          curl -sSL https://github.com/allure-framework/allurectl/releases/latest/download/allurectl_linux_amd64 \
+            -o /usr/local/bin/allurectl && chmod +x /usr/local/bin/allurectl
           pip install requests --quiet
           python3 sast-canary-src/scripts/allure-testops-sync.py \
             --sarif      canary-sarif/csharp.sarif \
@@ -235,4 +240,5 @@ jobs:
             --version    "${{ github.ref_name }}" \
             --scan-type  canary \
             --run-id     "${{ github.run_id }}" \
-            --run-url    "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --run-url    "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --allurectl  /usr/local/bin/allurectl
