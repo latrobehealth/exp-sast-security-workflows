@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "OWASP Top 10:2021 and CWE to NIST SP 800-53 Rev 5 control mapping. Used by nvd-dependency-scan.py for CVE enrichment and by application repos for Allure TestOps tagging. The controls_implemented_in_codebase section is intentionally empty here — extend it in each application repo's own copy.",
+  "version": "1.0.0",
+  "nist_framework": "NIST SP 800-53 Rev 5",
+  "owasp_to_nist": {
+    "A01:2021-Broken Access Control": {
+      "controls": ["AC-3", "AC-4", "AC-5", "AC-6", "AU-9"],
+      "families": ["Access Control", "Audit and Accountability"],
+      "description": "Restrictions on authenticated users are not properly enforced"
+    },
+    "A02:2021-Cryptographic Failures": {
+      "controls": ["SC-8", "SC-12", "SC-13", "SC-28"],
+      "families": ["System and Communications Protection"],
+      "description": "Failures related to cryptography often lead to sensitive data exposure"
+    },
+    "A03:2021-Injection": {
+      "controls": ["SI-10"],
+      "families": ["System and Information Integrity"],
+      "description": "Injection flaws such as SQL, NoSQL, OS, and LDAP injection"
+    },
+    "A04:2021-Insecure Design": {
+      "controls": ["SA-11", "SA-15", "SA-17"],
+      "families": ["System and Services Acquisition"],
+      "description": "Missing or ineffective control design"
+    },
+    "A05:2021-Security Misconfiguration": {
+      "controls": ["CM-6", "CM-7", "SI-11"],
+      "families": ["Configuration Management", "System and Information Integrity"],
+      "description": "Missing security hardening or improperly configured permissions"
+    },
+    "A06:2021-Vulnerable and Outdated Components": {
+      "controls": ["SA-11", "SI-2", "SI-3"],
+      "families": ["System and Services Acquisition", "System and Information Integrity"],
+      "description": "Using components with known vulnerabilities"
+    },
+    "A07:2021-Identification and Authentication Failures": {
+      "controls": ["IA-2", "IA-5", "IA-8", "AC-3"],
+      "families": ["Identification and Authentication", "Access Control"],
+      "description": "Authentication and session management failures"
+    },
+    "A08:2021-Software and Data Integrity Failures": {
+      "controls": ["SA-11", "SI-7", "SI-10"],
+      "families": ["System and Services Acquisition", "System and Information Integrity"],
+      "description": "Code and infrastructure that does not protect against integrity violations"
+    },
+    "A09:2021-Security Logging and Monitoring Failures": {
+      "controls": ["AU-2", "AU-3", "AU-9", "AU-12"],
+      "families": ["Audit and Accountability"],
+      "description": "Insufficient logging, monitoring, and alerting"
+    },
+    "A10:2021-Server-Side Request Forgery": {
+      "controls": ["SC-7", "SI-10"],
+      "families": ["System and Communications Protection", "System and Information Integrity"],
+      "description": "SSRF flaws allow attackers to induce server-side requests"
+    }
+  },
+  "cwe_to_nist": {
+    "CWE-20":  { "controls": ["SI-10"], "title": "Improper Input Validation" },
+    "CWE-22":  { "controls": ["AC-3", "SI-10"], "title": "Path Traversal" },
+    "CWE-78":  { "controls": ["SI-10"], "title": "OS Command Injection" },
+    "CWE-79":  { "controls": ["SI-10"], "title": "Cross-Site Scripting (XSS)" },
+    "CWE-89":  { "controls": ["SI-10"], "title": "SQL Injection" },
+    "CWE-90":  { "controls": ["SI-10"], "title": "LDAP Injection" },
+    "CWE-93":  { "controls": ["SI-10"], "title": "CRLF Injection" },
+    "CWE-94":  { "controls": ["SI-10"], "title": "Code Injection" },
+    "CWE-200": { "controls": ["SI-11", "AC-3"], "title": "Exposure of Sensitive Information" },
+    "CWE-209": { "controls": ["SI-11"], "title": "Error Message Contains Sensitive Information" },
+    "CWE-259": { "controls": ["IA-5", "SC-12"], "title": "Hard-coded Password" },
+    "CWE-284": { "controls": ["AC-3", "AC-6"], "title": "Improper Access Control" },
+    "CWE-285": { "controls": ["AC-3", "AC-6"], "title": "Improper Authorization" },
+    "CWE-295": { "controls": ["SC-8"], "title": "Improper Certificate Validation" },
+    "CWE-306": { "controls": ["IA-2"], "title": "Missing Authentication for Critical Function" },
+    "CWE-311": { "controls": ["SC-8", "SC-28"], "title": "Missing Encryption of Sensitive Data" },
+    "CWE-319": { "controls": ["SC-8"], "title": "Cleartext Transmission of Sensitive Information" },
+    "CWE-326": { "controls": ["SC-12", "SC-13"], "title": "Inadequate Encryption Strength" },
+    "CWE-352": { "controls": ["SC-8", "SI-10"], "title": "Cross-Site Request Forgery (CSRF)" },
+    "CWE-400": { "controls": ["SC-5"], "title": "Uncontrolled Resource Consumption" },
+    "CWE-502": { "controls": ["SI-10"], "title": "Deserialization of Untrusted Data" },
+    "CWE-521": { "controls": ["IA-5"], "title": "Weak Password Requirements" },
+    "CWE-601": { "controls": ["SC-8", "SI-10"], "title": "Open Redirect" },
+    "CWE-611": { "controls": ["SI-10"], "title": "XML External Entity (XXE)" },
+    "CWE-614": { "controls": ["SC-8"], "title": "Sensitive Cookie Without Secure Attribute" },
+    "CWE-693": { "controls": ["SC-8", "CM-6"], "title": "Protection Mechanism Failure" },
+    "CWE-732": { "controls": ["AC-3", "AC-6"], "title": "Incorrect Permission Assignment" },
+    "CWE-798": { "controls": ["IA-5", "SC-12"], "title": "Use of Hard-coded Credentials" },
+    "CWE-862": { "controls": ["AC-3"], "title": "Missing Authorization" },
+    "CWE-863": { "controls": ["AC-3", "AC-6"], "title": "Incorrect Authorization" }
+  },
+  "control_families": {
+    "AC": "Access Control",
+    "AU": "Audit and Accountability",
+    "CA": "Assessment, Authorization and Monitoring",
+    "CM": "Configuration Management",
+    "CP": "Contingency Planning",
+    "IA": "Identification and Authentication",
+    "IR": "Incident Response",
+    "MA": "Maintenance",
+    "MP": "Media Protection",
+    "PE": "Physical and Environmental Protection",
+    "PL": "Planning",
+    "PM": "Program Management",
+    "PS": "Personnel Security",
+    "PT": "PII Processing and Transparency",
+    "RA": "Risk Assessment",
+    "SA": "System and Services Acquisition",
+    "SC": "System and Communications Protection",
+    "SI": "System and Information Integrity",
+    "SR": "Supply Chain Risk Management"
+  },
+  "controls_implemented_in_codebase": {}
+}
