@@ -27,21 +27,21 @@ EXPECTED: dict[str, tuple[str, str]] = {
     "cs/path-injection":                            ("A01", "Path Traversal"),
     "cs/web/missing-function-level-access-control": ("A01", "Missing Access Control"),
     # A02 — Cryptographic Failures
-    "cs/use-of-broken-or-weak-cryptographic-algorithm": ("A02", "Weak Cryptographic Algorithm (MD5)"),
+    # Rule renamed: cs/use-of-broken-or-weak-cryptographic-algorithm → cs/weak-encryption (csharp-queries ≥ 1.7.4)
+    "cs/weak-encryption":                           ("A02", "Weak Cryptographic Algorithm (MD5/SHA1)"),
     "cs/hardcoded-credentials":                     ("A02", "Hardcoded Credentials"),
     # A03 — Injection
     "cs/sql-injection":                             ("A03", "SQL Injection"),
     "cs/command-line-injection":                    ("A03", "OS Command Injection"),
     "cs/web/xss":                                   ("A03", "Cross-Site Scripting (XSS)"),
     # A05 — Security Misconfiguration
-    "cs/web/unvalidated-url-redirect":              ("A05", "Unvalidated Redirect"),
+    # Rule renamed: cs/web/unvalidated-url-redirect → cs/web/unvalidated-url-redirection (csharp-queries ≥ 1.7.4)
+    "cs/web/unvalidated-url-redirection":           ("A05", "Unvalidated Redirect"),
     # A07 / A09 — Auth Failures / Logging Failures
     "cs/log-forging":                               ("A07/A09", "Log Forging (credentials / sensitive data)"),
     # A08 — Software and Data Integrity
-    # cs/xml-injection = XPath injection (user input inside SelectSingleNode expression).
-    # XXE is a different vulnerability; Request.Body (Stream) is not a CodeQL taint source
-    # in security-extended, so XXE is in BONUS below.
-    "cs/xml-injection":                             ("A08", "XPath Injection"),
+    # Rule renamed: cs/xml-injection → cs/xml/xpath-injection (csharp-queries ≥ 1.7.4)
+    "cs/xml/xpath-injection":                       ("A08", "XPath Injection"),
 }
 
 # Rules present in the canary but outside security-extended (need security-and-quality)
