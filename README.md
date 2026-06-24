@@ -13,6 +13,7 @@ Reusable GitHub Actions workflows for static application security testing (SAST)
 - [Workflow Reference](#workflow-reference)
   - [codeql-reusable.yml](#codeql-reusableyml--codeql-analysis)
   - [dependency-review-reusable.yml](#dependency-review-reusableyml--dependency-review)
+  - [nvd-scan-reusable.yml](#nvd-scan-reusableyml--nvd-dependency-vulnerability-scan)
 - [SARIF Enrichment](#sarif-enrichment--owasp-tags-in-github)
 - [SAST Canary](#sast-canary)
 - [Allure TestOps Integration](#allure-testops-integration)
@@ -192,7 +193,7 @@ The table below maps each [OWASP Top 10:2025](https://owasp.org/Top10/2025/) cat
 |---|---|:---:|:---:|---|
 | A01 | [Broken Access Control](https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/) | Partial | — | Path traversal, missing access control, open redirect, SSRF (CWE-918). Logic-based access control requires manual review. |
 | A02 | [Security Misconfiguration](https://owasp.org/Top10/2025/A02_2025-Security_Misconfiguration/) | Partial | — | Code-level insecure defaults and stack-trace exposure caught by CodeQL. IaC misconfigurations require Checkov / Trivy. |
-| A03 | [Software Supply Chain Failures](https://owasp.org/Top10/2025/A03_2025-Software_Supply_Chain_Failures/) | — | **Yes** | CVE detection on added/changed dependencies. Pair with Dependabot for automated updates. |
+| A03 | [Software Supply Chain Failures](https://owasp.org/Top10/2025/A03_2025-Software_Supply_Chain_Failures/) | — | **Yes** | CVE detection on added/changed dependencies (PR diff). Pair with  for full NuGet package scanning against the NIST NVD. |
 | A04 | [Cryptographic Failures](https://owasp.org/Top10/2025/A04_2025-Cryptographic_Failures/) | **Yes** | Partial | Weak algorithms (MD5/SHA1), insecure RNG, hardcoded secrets. Dependency Review flags deps with crypto CVEs. |
 | A05 | [Injection](https://owasp.org/Top10/2025/A05_2025-Injection/) | **Yes** | — | SQL, OS command, XSS, path, template, LDAP, XML injection. Core CodeQL strength. |
 | A06 | [Insecure Design](https://owasp.org/Top10/2025/A06_2025-Insecure_Design/) | — | — | Architectural weakness — requires threat modelling and design review. Not detectable via SAST. |
@@ -353,6 +354,48 @@ jobs:
       deny-packages: "npm:event-stream, npm:node-ipc"
     secrets: inherit
 ```
+
+---
+
+###  — NVD Dependency Vulnerability Scan
+
+Scans every NuGet  in the calling repository against the [NIST National Vulnerability Database (NVD) 2.0 API](https://services.nvd.nist.gov/rest/json/cves/2.0). Covers **NIST SP 800-53 Rev 5** controls SA-11 (Developer Security Testing), SI-2 (Flaw Remediation), and SI-3 (Malicious Code Protection).
+
+> **.NET / NuGet only.** This workflow reads  files. It does not scan , , or other package manifests.
+
+#### Inputs
+
+| Input | Type | Required | Default | Description |
+|---|---|---|---|---|
+|  |  | No |  | Root directory containing  files |
+|  |  | No |  | Report CVEs at or above this CVSS base score in Allure results |
+|  |  | No |  | Fail CI if any CVE is at or above this score (CRITICAL by default) |
+|  |  | No |  | Allure TestOps project ID; set to  to skip upload |
+|  |  | No |  | Test plan name in Allure TestOps to link the launch to |
+|  |  | No |  | Runner label |
+
+#### Secrets
+
+| Secret | Required | Description |
+|---|---|---|
+|  | No | Free key for 50 req/30 s quota (vs 5 req/30 s without key). [Request here](https://nvd.nist.gov/developers/request-an-api-key) |
+|  | No | Allure TestOps base URL. Omit to skip upload. |
+|  | No | Allure TestOps API token. Omit to skip upload. |
+
+#### Fail logic
+
+| Exit | Meaning |
+|---|---|
+|  | All packages scanned; no CVEs at or above  |
+|  | One or more CVEs at or above  — pipeline fails |
+
+#### Example — .NET repo with Allure upload
+
+
+
+#### Example — combined SAST + NVD scan pipeline (.NET)
+
+
 
 ---
 
@@ -544,7 +587,8 @@ The following OWASP Top 10:2025 categories require controls outside this reposit
 │   │   └── enrich-sarif-owasp.py          # Injects OWASP tags into SARIF before upload
 │   └── workflows/
 │       ├── codeql-reusable.yml            # CodeQL SAST + SARIF enrichment + Allure sync + canary
-│       └── dependency-review-reusable.yml # Dependency CVE and licence scan
+│       ├── dependency-review-reusable.yml # Dependency CVE and licence scan
+│       └── nvd-scan-reusable.yml          # NIST NVD dependency vulnerability scan (.NET/NuGet)
 ├── canary/
 │   ├── Controllers/
 │   │   └── SastCanaryController.cs        # Intentional vulnerabilities (one per OWASP class)
@@ -555,7 +599,10 @@ The following OWASP Top 10:2025 categories require controls outside this reposit
 │   ├── Program.cs
 │   └── Sast.Canary.csproj
 ├── scripts/
-│   └── allure-testops-sync.py            # Idempotent SARIF → Allure TestOps sync
+│   ├── allure-testops-sync.py            # Idempotent SARIF → Allure TestOps sync
+│   ├── allure-upload-results.py          # Allure TestOps launch create/upload/close/link
+│   ├── nvd-dependency-scan.py            # NVD 2.0 API scanner → Allure JSON results
+│   └── nist-control-map.json             # OWASP → NIST SP 800-53 and CWE → NIST mappings
 └── README.md
 ```
 
