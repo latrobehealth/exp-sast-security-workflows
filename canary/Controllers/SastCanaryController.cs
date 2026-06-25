@@ -73,9 +73,11 @@ public sealed class SastCanaryController : ControllerBase
     /// A02-a  Weak encryption algorithm — DES.
     /// Rule: cs/weak-encryption
     /// Pattern: DES.Create() — DES is a deprecated 56-bit symmetric cipher.
-    /// NOTE: MD5/SHA-1 are hash functions, not encryption algorithms.
-    ///       In csharp-queries ≥ 1.7.4 cs/weak-encryption only fires on weak
-    ///       ENCRYPTION ciphers (DES, 3DES, RC4).  Hash functions do not trigger it.
+    /// NOTE: cs/weak-encryption does NOT fire for DES.Create() in csharp-queries 1.7.4
+    ///       on ASP.NET Core 9.  The DES symmetric cipher sink is not modelled in this
+    ///       version of the C# query pack.  This pattern is kept as an educational
+    ///       example of weak encryption and is listed as BONUS in verify-canary.py
+    ///       until the query models DES/3DES/RC4 as weak-encryption sinks.
     /// </summary>
     [HttpPost("a02/encrypt")]
     public IActionResult EncryptData([FromBody] string input)
