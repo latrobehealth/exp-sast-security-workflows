@@ -142,18 +142,12 @@ OWASP_TEST_CASES: list[dict] = [
         ),
     },
     {
-        "externalId":    "codeql-cs-xss",
-        "name":          "A03 — Cross-Site Scripting (cs/web/xss)",
-        "owasp":         "A03:2025",
-        "owaspCategory": "Injection",
-        "rule":          "cs/web/xss",
-        "severity":      "high",
-        "tags":          ["OWASP-A03", "CodeQL", "SAST", "security-extended"],
-        "owaspUrl":      "https://owasp.org/Top10/A03_2025-Injection/",
-        "description":   (
-            "CWE-79: Reflected XSS — user-controlled input rendered in an HTML response "
-            "(text/html) without HTML-encoding. Allows session hijacking or phishing."
-        ),
+        "externalId":    "codeql-cs-cleartext-storage",
+        "name":          "A02/A09 — Cleartext Storage of Sensitive Information (cs/cleartext-storage-of-sensitive-information)",
+        "story":         "A02/A09 — Cleartext Storage of Sensitive Information",
+        "rule":          "cs/cleartext-storage-of-sensitive-information",
+        "owasp":         "A02:2021-Cryptographic Failures",
+        "cwe":           "CWE-312",
     },
     {
         "externalId":    "codeql-cs-unvalidated-redirect",
@@ -584,8 +578,9 @@ def upload_results_to_launch(
     if allurectl_path:
         results_dir = result_files[0].parent
         base_url = client.base
-        token = client._s.headers.get("Authorization", "").removeprefix("Bearer ")
-        ok = _upload_via_allurectl(allurectl_path, base_url, token, project_id, launch_id, results_dir)
+        # allurectl expects the raw ALLURE_TESTOPS_API_TOKEN, not the JWT obtained after exchange
+        raw_token = os.environ.get("ALLURE_TESTOPS_API_TOKEN", "")
+        ok = _upload_via_allurectl(allurectl_path, base_url, raw_token, project_id, launch_id, results_dir)
         if ok:
             return True
         _log("  [warn] allurectl upload failed — falling through to REST approaches")
