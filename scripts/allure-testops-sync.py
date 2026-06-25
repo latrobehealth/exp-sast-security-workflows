@@ -144,10 +144,16 @@ OWASP_TEST_CASES: list[dict] = [
     {
         "externalId":    "codeql-cs-cleartext-storage",
         "name":          "A02/A09 — Cleartext Storage of Sensitive Information (cs/cleartext-storage-of-sensitive-information)",
-        "story":         "A02/A09 — Cleartext Storage of Sensitive Information",
+        "owasp":         "A02:2025",
+        "owaspCategory": "Cryptographic Failures / Security Logging Failures",
         "rule":          "cs/cleartext-storage-of-sensitive-information",
-        "owasp":         "A02:2021-Cryptographic Failures",
-        "cwe":           "CWE-312",
+        "severity":      "high",
+        "tags":          ["OWASP-A02", "OWASP-A09", "CodeQL", "SAST", "security-extended"],
+        "owaspUrl":      "https://owasp.org/Top10/A02_2025-Cryptographic_Failures/",
+        "description":   (
+            "CWE-312: Credentials, tokens, or other sensitive values written to structured "
+            "logs in cleartext. Enables credential theft via log access."
+        ),
     },
     {
         "externalId":    "codeql-cs-unvalidated-redirect",
