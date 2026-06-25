@@ -70,41 +70,49 @@ public sealed class SastCanaryController : ControllerBase
     // ══════════════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// A02-a  Weak hash algorithms — MD5 and SHA1.
-    /// Rule: cs/use-of-broken-or-weak-cryptographic-algorithm
-    /// Pattern: MD5.Create() AND SHA1.Create() on the same method gives the rule
-    /// two independent taint paths to fire on; guards against single-instance misses.
+    /// A02-a  Weak encryption algorithm — DES.
+    /// Rule: cs/weak-encryption
+    /// Pattern: DES.Create() — DES is a deprecated 56-bit symmetric cipher.
+    /// NOTE: MD5/SHA-1 are hash functions, not encryption algorithms.
+    ///       In csharp-queries ≥ 1.7.4 cs/weak-encryption only fires on weak
+    ///       ENCRYPTION ciphers (DES, 3DES, RC4).  Hash functions do not trigger it.
     /// </summary>
-    [HttpPost("a02/hash")]
-    public IActionResult HashData([FromBody] string input)
+    [HttpPost("a02/encrypt")]
+    public IActionResult EncryptData([FromBody] string input)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(input);
 
-        using var md5  = MD5.Create();
-        var       md5Hash = md5.ComputeHash(bytes);   // cs/use-of-broken-or-weak-cryptographic-algorithm
-
-        using var sha1 = SHA1.Create();
-        var       shaHash = sha1.ComputeHash(bytes);  // cs/use-of-broken-or-weak-cryptographic-algorithm
-
-        return Ok(new { md5 = Convert.ToHexString(md5Hash), sha1 = Convert.ToHexString(shaHash) });
+        using var des = DES.Create();                         // cs/weak-encryption — DES is a weak cipher
+        des.GenerateKey();
+        des.GenerateIV();
+        using var encryptor = des.CreateEncryptor();
+        using var ms = new System.IO.MemoryStream();
+        using var cs = new System.Security.Cryptography.CryptoStream(
+            ms, encryptor, System.Security.Cryptography.CryptoStreamMode.Write);
+        cs.Write(bytes, 0, bytes.Length);
+        cs.FlushFinalBlock();
+        return Ok(Convert.ToBase64String(ms.ToArray()));
     }
 
     /// <summary>
-    /// A02-b  Hardcoded credential passed to a network authentication API.
+    /// A02-b  Hardcoded credential in SMTP client.
     /// Rule: cs/hardcoded-credentials
-    /// Pattern: literal string password flows to HttpClientHandler.Credentials
-    /// Using HttpClientHandler ensures the credential flows into a real HTTP
-    /// authentication context that CodeQL's C# taint models track.
+    /// Pattern: literal password — NetworkCredential — SmtpClient.Credentials — smtp.Send()
+    /// SmtpClient.Credentials is a tracked authentication sink in CodeQL C#.
+    /// The smtp.Send() call ensures the credential flows into a real network I/O operation.
     /// </summary>
     [HttpGet("a02/connect")]
     public IActionResult HardcodedCredential()
     {
-        var handler = new HttpClientHandler
+#pragma warning disable SYSLIB0006 // SmtpClient is obsolete but available; used as a CodeQL canary sink
+        using var smtp = new System.Net.Mail.SmtpClient("mail.prod.example.com", 587)
         {
-            Credentials = new NetworkCredential("sa", "Hardcoded@Pass2025!")
+            EnableSsl   = true,
+            Credentials = new NetworkCredential("svc@example.com", "Hardcoded@Pass2025!")
         };
-        using var client = new HttpClient(handler);
-        return Ok("connected");
+        smtp.Send("svc@example.com", "admin@example.com", "canary", "test");
+#pragma warning restore SYSLIB0006
+        return Ok("sent");
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -145,11 +153,13 @@ public sealed class SastCanaryController : ControllerBase
     }
 
     /// <summary>
-    /// A03-c  Reflected XSS.
+    /// A03-c  Reflected XSS — documentation pattern only.
     /// Rule: cs/web/xss
     /// Pattern: [FromQuery] string → HttpResponse.WriteAsync (direct HTML write)
-    /// ContentResult is NOT a tracked XSS sink in CodeQL C# — must write directly
-    /// to HttpResponse to hit the tracked sink.
+    /// NOTE: Neither ContentResult nor Response.WriteAsync is modelled as an XSS sink
+    ///       in csharp-queries 1.7.4 for ASP.NET Core 9.  This pattern is kept for
+    ///       documentation and future suite improvements but is listed as BONUS in
+    ///       verify-canary.py until the query models ASP.NET Core output sinks.
     /// </summary>
     [HttpGet("a03/greet")]
     public async Task Greet([FromQuery] string name)
