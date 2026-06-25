@@ -33,7 +33,8 @@ EXPECTED: dict[str, tuple[str, str]] = {
     # A03 — Injection
     "cs/sql-injection":                             ("A03", "SQL Injection"),
     "cs/command-line-injection":                    ("A03", "OS Command Injection"),
-    "cs/web/xss":                                   ("A03", "Cross-Site Scripting (XSS)"),
+    # Replaces cs/web/xss — ASP.NET Core 9 HTML sinks not yet modelled in csharp-queries 1.7.4
+    "cs/cleartext-storage-of-sensitive-information": ("A02/A09", "Cleartext Storage of Sensitive Information"),
     # A05 — Security Misconfiguration
     # Rule renamed: cs/web/unvalidated-url-redirect → cs/web/unvalidated-url-redirection (csharp-queries ≥ 1.7.4)
     "cs/web/unvalidated-url-redirection":           ("A05", "Unvalidated Redirect"),
@@ -47,9 +48,11 @@ EXPECTED: dict[str, tuple[str, str]] = {
 # Rules present in the canary but outside security-extended (need security-and-quality)
 # or not yet modelled by CodeQL C# pack.  Informational only — do not affect pass/fail.
 BONUS: dict[str, tuple[str, str]] = {
-    "cs/stack-trace-exposure": ("A05", "Stack Trace Exposure (needs security-and-quality suite)"),
-    "cs/ssrf":                 ("A10", "SSRF (HttpClient not yet modelled as SSRF sink in C# pack)"),
-    "cs/xml-external-entity":  ("A08", "XXE — Request.Body stream not a taint source in security-extended"),
+    "cs/stack-trace-exposure":  ("A05", "Stack Trace Exposure (needs security-and-quality suite)"),
+    "cs/ssrf":                  ("A10", "SSRF (HttpClient not yet modelled as SSRF sink in C# pack)"),
+    "cs/xml-external-entity":   ("A08", "XXE — Request.Body stream not a taint source in security-extended"),
+    # XSS: ContentResult and Response.WriteAsync are not tracked XSS sinks in ASP.NET Core 9 (csharp-queries 1.7.4)
+    "cs/web/xss":               ("A03", "XSS — ASP.NET Core 9 HTML output sinks not yet modelled in csharp-queries 1.7.4"),
 }
 
 
