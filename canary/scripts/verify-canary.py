@@ -26,15 +26,11 @@ EXPECTED: dict[str, tuple[str, str]] = {
     # A01 — Broken Access Control
     "cs/path-injection":                            ("A01", "Path Traversal"),
     "cs/web/missing-function-level-access-control": ("A01", "Missing Access Control"),
-    # A02 — Cryptographic Failures
-    # Rule renamed: cs/use-of-broken-or-weak-cryptographic-algorithm → cs/weak-encryption (csharp-queries ≥ 1.7.4)
-    "cs/weak-encryption":                           ("A02", "Weak Cryptographic Algorithm (MD5/SHA1)"),
-    "cs/hardcoded-credentials":                     ("A02", "Hardcoded Credentials"),
     # A03 — Injection
     "cs/sql-injection":                             ("A03", "SQL Injection"),
     "cs/command-line-injection":                    ("A03", "OS Command Injection"),
     # Replaces cs/web/xss — ASP.NET Core 9 HTML sinks not yet modelled in csharp-queries 1.7.4
-    "cs/cleartext-storage-of-sensitive-information": ("A02/A09", "Cleartext Storage of Sensitive Information"),
+    "cs/cleartext-storage-of-sensitive-information": ("A02/A09", "Cleartext Storage of Sensitive Information (credentials/tokens logged in cleartext)"),
     # A05 — Security Misconfiguration
     # Rule renamed: cs/web/unvalidated-url-redirect → cs/web/unvalidated-url-redirection (csharp-queries ≥ 1.7.4)
     "cs/web/unvalidated-url-redirection":           ("A05", "Unvalidated Redirect"),
@@ -53,6 +49,9 @@ BONUS: dict[str, tuple[str, str]] = {
     "cs/xml-external-entity":   ("A08", "XXE — Request.Body stream not a taint source in security-extended"),
     # XSS: ContentResult and Response.WriteAsync are not tracked XSS sinks in ASP.NET Core 9 (csharp-queries 1.7.4)
     "cs/web/xss":               ("A03", "XSS — ASP.NET Core 9 HTML output sinks not yet modelled in csharp-queries 1.7.4"),
+    # A02: DES.Create() and SmtpClient.Credentials not modelled as sinks in csharp-queries 1.7.4 for ASP.NET Core 9
+    "cs/weak-encryption":       ("A02", "Weak Encryption — DES.Create() and MD5/SHA1 not modelled as cs/weak-encryption sinks in csharp-queries 1.7.4 for ASP.NET Core 9"),
+    "cs/hardcoded-credentials": ("A02", "Hardcoded Credentials — NetworkCredential/SmtpClient not modelled as cs/hardcoded-credentials sinks in csharp-queries 1.7.4 for ASP.NET Core 9"),
 }
 
 
