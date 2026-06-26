@@ -217,9 +217,10 @@ jobs:
       - name: Verify OWASP Top 10:2025 coverage
         run: python3 sast-canary-src/canary/scripts/verify-canary.py canary-sarif/csharp.sarif
 
-      # Sync canary scan results to Allure TestOps (scanner-health project).
-      # The canary always records to the exp-sast-security-workflows project so
-      # scanner coverage history is kept separate from application security results.
+      # Sync canary scan results to Allure TestOps.
+      # Results are recorded in the calling repo's project (inputs.allure-project-name)
+      # so all security evidence — application scan, canary health, and NIST tests —
+      # is consolidated in one place.
       - name: Sync canary coverage to Allure TestOps
         if: ${{ always() && inputs.allure-project-name != '' }}
         continue-on-error: true
@@ -236,7 +237,7 @@ jobs:
           pip install requests --quiet
           python3 sast-canary-src/scripts/allure-testops-sync.py \
             --sarif      canary-sarif/csharp.sarif \
-            --project    "exp-sast-security-workflows" \
+            --project    "${{ inputs.allure-project-name }}" \
             --version    "${{ github.ref_name }}" \
             --scan-type  canary \
             --run-id     "${{ github.run_id }}" \
