@@ -135,6 +135,16 @@ jobs:
           sarif_file: sarif-results
           category: "/language:${{ matrix.language }}"
 
+      # Upload SARIF as a workflow artifact so the calling repo's jira-security-sync
+      # job can download and process it without re-running the analysis.
+      - name: Upload SARIF as workflow artifact (for JIRA security sync)
+        if: ${{ matrix.language == 'csharp' && inputs.allure-project-name != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif-csharp
+          path: sarif-results/csharp.sarif
+          retention-days: 1
+
       # Sync application scan results to Allure TestOps.
       # Runs only for C# (where the OWASP test cases live) and only when
       # allure-project-name is set.  Never fails CI (continue-on-error).
@@ -213,6 +223,16 @@ jobs:
           # Filter by category "sast-canary" or path "sast-canary-src/**" to isolate them.
           category: "/language:csharp/sast-canary"
           output:   canary-sarif
+
+      # Upload canary SARIF as a workflow artifact so the calling repo's jira-security-sync
+      # job can check which expected rules fired without re-running the analysis.
+      - name: Upload canary SARIF as workflow artifact (for JIRA security sync)
+        if: ${{ inputs.allure-project-name != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-sarif-csharp
+          path: canary-sarif/csharp.sarif
+          retention-days: 1
 
       - name: Verify OWASP Top 10:2025 coverage
         run: python3 sast-canary-src/canary/scripts/verify-canary.py canary-sarif/csharp.sarif
