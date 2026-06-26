@@ -87,7 +87,7 @@ def build_table(
         status = "✅ Detected" if rule_id in found else "⚪ Not expected (bonus)"
         rows.append(f"| {owasp} | {label} | `{rule_id}` | {status} |")
 
-    return rows, passed, failed
+    return rows, passed, len(expected)
 
 
 def write_summary(lines: list[str]) -> None:

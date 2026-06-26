@@ -221,7 +221,7 @@ jobs:
       # The canary always records to the exp-sast-security-workflows project so
       # scanner coverage history is kept separate from application security results.
       - name: Sync canary coverage to Allure TestOps
-        if: ${{ inputs.allure-project-name != '' }}
+        if: ${{ always() && inputs.allure-project-name != '' }}
         continue-on-error: true
         env:
           ALLURE_TESTOPS_URL:       ${{ secrets.ALLURE_TESTOPS_URL }}
